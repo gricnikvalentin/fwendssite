@@ -1,5 +1,3 @@
-/* supabase.js  –  tiny helper layer around the Supabase JavaScript client
-   Make **one** change:  plug in your own Supabase URL and anon key. */
 
 import { createClient } from "https://cdn.jsdelivr.net/npm/@supabase/supabase-js/+esm";
 
