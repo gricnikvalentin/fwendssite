@@ -5,25 +5,20 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Photo Diary</title>
 
-    <!-- Tailwind (pure CSS) -->
     <script src="https://cdn.tailwindcss.com"></script>
 
-    <!-- Supabase client & CRUD helpers (must load before our React app) -->
     <script type="module" src="./supabase.js"></script>
   </head>
 
   <body class="bg-gray-100 min-h-screen">
     <div id="root"></div>
 
-    <!-- React / React-DOM (dev builds keep single-file demo simple) -->
     <script crossorigin src="https://unpkg.com/react@18/umd/react.development.js"></script>
     <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.development.js"></script>
-    <!-- Babel so we can write JSX directly in the browser -->
     <script src="https://unpkg.com/babel-standalone@6/babel.min.js"></script>
 
     <!-- Main application -->
     <script type="text/babel">
-      /* Grab Supabase helpers placed on window by supabase.js */
       const {
         listPosts,
         createPost,
@@ -73,27 +68,22 @@
         const handleSubmit = async (e) => {
           e.preventDefault();
 
-          /* 1️⃣ upload image if user selected a new one */
           if (file) {
             const publicURL = await uploadImage(file);
             if (!publicURL) return;           // early-out on error
             form.photo_url = publicURL;
           }
 
-          /* 2️⃣ ensure a UUID (new posts only) */
           if (!form.id) form.id = crypto.randomUUID();
 
-          /* 3️⃣ create or update in DB */
           form.id && posts.find(p => p.id === form.id)
             ? await updatePost(form)
             : await createPost(form);
 
-          /* 4️⃣ refresh UI */
           setPosts(await listPosts());
           resetForm();
         };
 
-        /* ───────────────── post utilities ───────────────── */
         const startEdit = (post) => {
           setForm(post);
           setPreview(post.photo_url);
@@ -107,7 +97,6 @@
           }
         };
 
-        /* ───────────────── group by date for display ───────────────── */
         const grouped = posts.reduce((acc, p) => {
           (acc[p.date] = acc[p.date] || []).push(p);
           return acc;
