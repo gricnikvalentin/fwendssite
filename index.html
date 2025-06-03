@@ -1,0 +1,261 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Photo Diary</title>
+
+    <!-- Tailwind (pure CSS) -->
+    <script src="https://cdn.tailwindcss.com"></script>
+
+    <!-- Supabase client & CRUD helpers (must load before our React app) -->
+    <script type="module" src="./supabase.js"></script>
+  </head>
+
+  <body class="bg-gray-100 min-h-screen">
+    <div id="root"></div>
+
+    <!-- React / React-DOM (dev builds keep single-file demo simple) -->
+    <script crossorigin src="https://unpkg.com/react@18/umd/react.development.js"></script>
+    <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.development.js"></script>
+    <!-- Babel so we can write JSX directly in the browser -->
+    <script src="https://unpkg.com/babel-standalone@6/babel.min.js"></script>
+
+    <!-- Main application -->
+    <script type="text/babel">
+      /* Grab Supabase helpers placed on window by supabase.js */
+      const {
+        listPosts,
+        createPost,
+        updatePost,
+        deletePost: removePost,
+        uploadImage,
+      } = window.supabaseHelpers;
+
+      function App() {
+        const [posts, setPosts] = React.useState([]);
+        const today = new Date().toISOString().slice(0, 10);
+        const blankForm = {
+          title: "",
+          author: "",
+          date: today,
+          description: "",
+          photo_url: "",        // will become a public URL after upload
+        };
+        const [form, setForm] = React.useState(blankForm);
+        const [preview, setPreview] = React.useState("");
+        const [file, setFile] = React.useState(null);
+
+        /* ───────────────── initial load ───────────────── */
+        React.useEffect(() => {
+          (async () => setPosts(await listPosts()))();
+        }, []);
+
+        /* ───────────────── form handlers ───────────────── */
+        const handleChange = (e) =>
+          setForm({ ...form, [e.target.name]: e.target.value });
+
+        const handleFile = (e) => {
+          const f = e.target.files[0];
+          setFile(f);
+          if (!f) return;
+          const reader = new FileReader();
+          reader.onload = (ev) => setPreview(ev.target.result);
+          reader.readAsDataURL(f);
+        };
+
+        const resetForm = () => {
+          setForm(blankForm);
+          setPreview("");
+          setFile(null);
+        };
+
+        const handleSubmit = async (e) => {
+          e.preventDefault();
+
+          /* 1️⃣ upload image if user selected a new one */
+          if (file) {
+            const publicURL = await uploadImage(file);
+            if (!publicURL) return;           // early-out on error
+            form.photo_url = publicURL;
+          }
+
+          /* 2️⃣ ensure a UUID (new posts only) */
+          if (!form.id) form.id = crypto.randomUUID();
+
+          /* 3️⃣ create or update in DB */
+          form.id && posts.find(p => p.id === form.id)
+            ? await updatePost(form)
+            : await createPost(form);
+
+          /* 4️⃣ refresh UI */
+          setPosts(await listPosts());
+          resetForm();
+        };
+
+        /* ───────────────── post utilities ───────────────── */
+        const startEdit = (post) => {
+          setForm(post);
+          setPreview(post.photo_url);
+          window.scrollTo({ top: 0, behavior: "smooth" });
+        };
+
+        const deletePost = async (id) => {
+          if (confirm("Delete this post?")) {
+            await removePost(id);
+            setPosts(await listPosts());
+          }
+        };
+
+        /* ───────────────── group by date for display ───────────────── */
+        const grouped = posts.reduce((acc, p) => {
+          (acc[p.date] = acc[p.date] || []).push(p);
+          return acc;
+        }, {});
+        const sortedDates = Object.keys(grouped).sort(
+          (a, b) => new Date(b) - new Date(a)
+        );
+
+        return (
+          <div className="max-w-4xl mx-auto p-4">
+            <h1 className="text-3xl font-bold text-center mb-6">FWENDS PICTURE BOARD FOR JUNE</h1>
+
+            {/* ───────────── add / edit form ───────────── */}
+            <form
+              onSubmit={handleSubmit}
+              className="bg-white rounded-2xl shadow p-6 grid gap-4"
+            >
+              <h2 className="text-xl font-semibold mb-1">
+                {form.id ? "Edit post" : "New post"}
+              </h2>
+
+              {["title", "author"].map((field) => (
+                <div key={field} className="grid gap-1">
+                  <label className="font-medium capitalize" htmlFor={field}>
+                    {field}
+                  </label>
+                  <input
+                    id={field}
+                    name={field}
+                    value={form[field]}
+                    onChange={handleChange}
+                    required
+                    className="p-2 border rounded"
+                  />
+                </div>
+              ))}
+
+              <div className="grid gap-1">
+                <label className="font-medium" htmlFor="date">Date</label>
+                <input
+                  type="date"
+                  id="date"
+                  name="date"
+                  value={form.date}
+                  onChange={handleChange}
+                  required
+                  className="p-2 border rounded"
+                />
+              </div>
+
+              <div className="grid gap-1">
+                <label className="font-medium" htmlFor="image">Photo</label>
+                <input
+                  type="file"
+                  accept="image/*"
+                  id="image"
+                  onChange={handleFile}
+                  className="p-2 border rounded"
+                />
+                {preview && (
+                  <img
+                    src={preview}
+                    alt="preview"
+                    className="h-48 object-cover mt-2 rounded-xl border"
+                  />
+                )}
+              </div>
+
+              <div className="grid gap-1">
+                <label className="font-medium" htmlFor="description">
+                  Description
+                </label>
+                <textarea
+                  id="description"
+                  name="description"
+                  rows="3"
+                  value={form.description}
+                  onChange={handleChange}
+                  className="p-2 border rounded"
+                />
+              </div>
+
+              <div className="flex gap-3">
+                <button
+                  type="submit"
+                  className="bg-blue-600 hover:bg-blue-700 text-white py-2 px-6 rounded-xl"
+                >
+                  {form.id ? "Update post" : "Add post"}
+                </button>
+                {form.id && (
+                  <button
+                    type="button"
+                    onClick={resetForm}
+                    className="bg-gray-200 hover:bg-gray-300 text-gray-800 py-2 px-6 rounded-xl"
+                  >
+                    Cancel
+                  </button>
+                )}
+              </div>
+            </form>
+
+            {/* ───────────── posts by day ───────────── */}
+            {sortedDates.map((d) => (
+              <section key={d} className="mt-10">
+                <h3 className="text-xl font-semibold mb-3">
+                  {new Date(d).toLocaleDateString(undefined, {
+                    year: "numeric",
+                    month: "long",
+                    day: "numeric",
+                  })}
+                </h3>
+                <div className="grid md:grid-cols-2 gap-6">
+                  {grouped[d].map((p) => (
+                    <article
+                      key={p.id}
+                      className="bg-white rounded-2xl shadow overflow-hidden flex flex-col"
+                    >
+                      <img src={p.photo_url} alt={p.title} className="w-full h-60 object-cover" />
+                      <div className="p-4 flex flex-col flex-1">
+                        <h4 className="text-lg font-semibold mb-1">{p.title}</h4>
+                        <p className="text-sm text-gray-600 flex-1">{p.description}</p>
+                        <p className="text-xs text-gray-500 my-3">Posted by {p.author}</p>
+
+                        <div className="flex gap-2 mt-auto">
+                          <button
+                            onClick={() => startEdit(p)}
+                            className="px-3 py-1 rounded-lg bg-yellow-100 hover:bg-yellow-200 text-yellow-800 text-sm"
+                          >
+                            ✏️ Edit
+                          </button>
+                          <button
+                            onClick={() => deletePost(p.id)}
+                            className="px-3 py-1 rounded-lg bg-red-100 hover:bg-red-200 text-red-800 text-sm"
+                          >
+                            🗑️ Delete
+                          </button>
+                        </div>
+                      </div>
+                    </article>
+                  ))}
+                </div>
+              </section>
+            ))}
+          </div>
+        );
+      }
+
+      ReactDOM.createRoot(document.getElementById("root")).render(<App />);
+    </script>
+  </body>
+</html>
